@@ -1,0 +1,159 @@
+first create project with name AESclientserverserver
+
+--------------------------------------------------------------------new javaclass (AESUtil)-----------------------
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+/**
+ *
+ * @author Sahyadri
+ */
+public class AESUtil {
+     private static final String ALGORITHM = "AES";
+
+    // Generate a new AES key
+    public static SecretKey generateKey() throws Exception {
+        KeyGenerator keyGen = KeyGenerator.getInstance(ALGORITHM);
+        keyGen.init(128); // AES key size: 128 bits
+        return keyGen.generateKey();
+    }
+
+    // Encrypt a message using the AES key
+    public static String encrypt(String plainText, SecretKey key) throws Exception {
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        byte[] encryptedBytes = cipher.doFinal(plainText.getBytes());
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+    }
+
+    // Decrypt a message using the AES key
+    public static String decrypt(String encryptedText, SecretKey key) throws Exception {
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, key);
+        byte[] decodedBytes = Base64.getDecoder().decode(encryptedText);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return new String(decryptedBytes);
+    }
+
+    // Convert key to a string format
+    public static String keyToString(SecretKey key) {
+        return Base64.getEncoder().encodeToString(key.getEncoded());
+    }
+
+    // Convert string format back to key
+    public static SecretKey stringToKey(String keyStr) {
+        byte[] decodedKey = Base64.getDecoder().decode(keyStr);
+        return new SecretKeySpec(decodedKey, 0, decodedKey.length, ALGORITHM);
+    }
+}
+----------------------------------------------------------------new class Server-------------------------------------------------
+import javax.crypto.SecretKey;
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+public class Server {
+    private static final int PORT = 1234;
+    private static SecretKey secretKey;
+
+    public static void main(String[] args) {
+        try {
+            // Generate and display the AES key
+            secretKey = AESUtil.generateKey();
+            System.out.println("Server AES Key: " + AESUtil.keyToString(secretKey));
+            
+            System.out.println("Server is running...");
+            ServerSocket serverSocket = new ServerSocket(PORT);
+            Socket clientSocket = serverSocket.accept();
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+
+            String receivedMessage;
+            while ((receivedMessage = in.readLine()) != null) {
+                if (receivedMessage.equals("HELLO")) {
+                    out.println("ACK: Hello, Client!");
+                } else {
+                    try {
+                        // Attempt to decrypt the message
+                        String decryptedMessage = AESUtil.decrypt(receivedMessage, secretKey);
+                        System.out.println("Received (decrypted): " + decryptedMessage);
+                        out.println("ACK: Message received!");
+                    } catch (Exception e) {
+                        out.println("ERROR: Decryption failed.");
+                    }
+                }
+            }
+
+            in.close();
+            out.close();
+            clientSocket.close();
+            serverSocket.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+----------------------------------------------------------------------------create new project Aesclientserver--------------
+-----------------------------------------new class aesutil-----------------------
+--------------------------------new class (Client)---------------------------------
+import javax.crypto.SecretKey;
+import java.io.*;
+import java.net.Socket;
+import java.util.Scanner;
+
+public class Client {
+    private static final String SERVER_ADDRESS = "localhost";
+    private static final int SERVER_PORT = 1234;
+    private static SecretKey secretKey;
+
+    public static void main(String[] args) {
+        try {
+            // Use the same AES key as printed by the server
+            String keyStr = "qAfkJudeuT/3XXtAEM/UOg=="; // Replace with the actual key from the server
+            secretKey = AESUtil.stringToKey(keyStr);
+
+            Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+
+            Scanner scanner = new Scanner(System.in);
+            while (true) {
+                System.out.print("Enter message (type 'exit' to quit): ");
+                String message = scanner.nextLine();
+
+                if (message.equalsIgnoreCase("exit")) {
+                    break;
+                }
+
+                // Encrypt the message
+                String encryptedMessage = AESUtil.encrypt(message, secretKey);
+                out.println(encryptedMessage); // Send the encrypted message
+
+                // Optionally, send a non-encrypted message to test
+                // out.println("HELLO");
+
+                // Read acknowledgment
+                String response = in.readLine();
+                System.out.println("Server response: " + response);
+            }
+
+            scanner.close();
+            in.close();
+            out.close();
+            socket.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+----------------------------------------------------------------------------
+use build and clean then run server and then client and later copy the key
